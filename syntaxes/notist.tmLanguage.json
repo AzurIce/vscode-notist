@@ -1,0 +1,589 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Notist",
+	"scopeName": "source.notist",
+
+	"repository": {
+		"fenced-raw": {
+			"comment": "围栏 Raw：行首 3+ 反引号，info 在 opening 行上；closing 长度须不小于 opener（TextMate 无法计长，放宽为 3+）。",
+			"begin": "^[ \\t]*(`{3,})([^`\\n]*)",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.raw.begin.notist" },
+				"2": { "name": "constant.other.language.notist" }
+			},
+			"end": "^[ \\t]*(`{3,})[ \\t]*$",
+			"endCaptures": {
+				"1": { "name": "punctuation.definition.raw.end.notist" }
+			},
+			"name": "markup.raw.block.notist"
+		},
+
+		"heading": {
+			"comment": "标题：行首 = run，数量即 level；body 复用行内 Markup。",
+			"begin": "^[ \\t]*(=+)[ \\t]+",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.heading.notist" }
+			},
+			"end": "$",
+			"name": "entity.name.section.notist",
+			"patterns": [{ "include": "#inline-markup" }]
+		},
+		"heading-empty": {
+			"match": "^[ \\t]*(=+)[ \\t]*$",
+			"captures": {
+				"1": { "name": "punctuation.definition.heading.notist" }
+			}
+		},
+
+		"rule": {
+			"comment": "分隔线：行首 3+ 的 `-`，其后只有横向空白到行尾。",
+			"match": "^[ \\t]*(-{3,})[ \\t]*$",
+			"captures": {
+				"1": { "name": "punctuation.definition.rule.notist" }
+			}
+		},
+
+		"task-item-marker": {
+			"match": "^[ \\t]*(-[ \\t]\\[[ xX]\\])(?=[ \\t]|$)",
+			"captures": {
+				"1": { "name": "punctuation.definition.task.notist" }
+			}
+		},
+		"list-item-marker": {
+			"match": "^[ \\t]*([-+])[ \\t]",
+			"captures": {
+				"1": { "name": "punctuation.definition.list_item.notist" }
+			}
+		},
+
+		"table-delimiter-row": {
+			"comment": "表格分隔行：`| :?-+:? | ...`（对齐冒号可选）。",
+			"match": "^[ \\t]*\\|(?:[ \\t]*:?-+:?[ \\t]*\\|)+[ \\t]*$",
+			"name": "meta.table.delimiter.notist",
+			"captures": {
+				"0": { "name": "punctuation.definition.table.notist" }
+			}
+		},
+		"table-pipe": {
+			"comment": "表格行内的管道分隔（不判 header/delimiter 相邻关系，TextMate 无跨行状态）。",
+			"match": "\\|",
+			"name": "punctuation.separator.table.notist"
+		},
+		"table-alignment": {
+			"match": "(?<=\\|)[ \\t]*(:?-+:?)[ \\t]*(?=\\|)",
+			"captures": {
+				"1": { "name": "constant.other.table-cell.notist" }
+			}
+		},
+
+		"escape": {
+			"comment": "Markup 中 `\\` + 标点 = 字面标点。",
+			"match": "\\\\([[:punct:]])",
+			"name": "constant.character.escape.notist"
+		},
+
+		"target-reference": {
+			"comment": "#<target> 引用：单行闭合，`::` 为段分隔，`/` 后缀进入 ItemName；\\< \\> \\\\ 转义。",
+			"begin": "(#)(<)",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.reference.notist" },
+				"2": { "name": "punctuation.definition.reference.begin.notist" }
+			},
+			"end": ">",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.reference.end.notist" }
+			},
+			"name": "meta.reference.notist",
+			"patterns": [
+				{ "include": "#target-content" }
+			]
+		},
+		"target-content": {
+			"patterns": [
+				{
+					"match": "\\\\[<>\\\\]",
+					"name": "constant.character.escape.notist"
+				},
+				{
+					"match": "::",
+					"name": "punctuation.separator.namespace.notist"
+				},
+				{
+					"match": "(?:^|(?<=[:</>]))(vault|self|super)(?=::)",
+					"captures": {
+						"1": { "name": "keyword.other.reserved.notist" }
+					}
+				},
+				{
+					"match": "/",
+					"name": "punctuation.separator.item.notist"
+				}
+			]
+		},
+
+		"import": {
+			"comment": "#import <path>::{name, name as alias}：显式选择器，无 wildcard。",
+			"begin": "(#)(import)(?=[ \\t])",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.embedded.notist" },
+				"2": { "name": "keyword.control.import.notist" }
+			},
+			"end": "(?=$)",
+			"patterns": [
+				{ "include": "#target-reference-inner" },
+				{
+					"begin": "(::)(\\{)",
+					"beginCaptures": {
+						"1": { "name": "punctuation.separator.namespace.notist" },
+						"2": { "name": "punctuation.definition.selector.begin.notist" }
+					},
+					"end": "\\}",
+					"endCaptures": {
+						"0": { "name": "punctuation.definition.selector.end.notist" }
+					},
+					"patterns": [{ "include": "#import-items" }]
+				}
+			]
+		},
+		"target-reference-inner": {
+			"comment": "import 内的 target：与 #target-reference 相同但不带 # 前缀。",
+			"begin": "<",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.reference.begin.notist" }
+			},
+			"end": ">",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.reference.end.notist" }
+			},
+			"name": "meta.reference.notist",
+			"patterns": [{ "include": "#target-content" }]
+		},
+		"import-items": {
+			"patterns": [
+				{
+					"match": "\\bas\\b",
+					"name": "keyword.control.import.as.notist"
+				},
+				{
+					"match": "[\\p{L}][\\p{L}\\p{N}_-]*",
+					"name": "entity.name.imported.notist"
+				},
+				{
+					"match": ",",
+					"name": "punctuation.separator.notist"
+				}
+			]
+		},
+
+		"content-block": {
+			"comment": "#[...] 手动 scope：内部回到 Markup（递归 $base）。",
+			"begin": "(#)(\\[)",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.embedded.notist" },
+				"2": { "name": "punctuation.definition.content-block.begin.notist" }
+			},
+			"end": "\\]",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.content-block.end.notist" }
+			},
+			"name": "meta.content-block.notist",
+			"patterns": [{ "include": "$base" }]
+		},
+
+		"code-block": {
+			"comment": "{...} Code block：Markup 中的块构造，内部是 Code。",
+			"begin": "\\{",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.code-block.begin.notist" }
+			},
+			"end": "\\}",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.code-block.end.notist" }
+			},
+			"name": "meta.code-block.notist",
+			"patterns": [{ "include": "#code" }]
+		},
+
+		"embedded-let": {
+			"comment": "#let 声明：函数定义糖 let f(x: T) -> R = body 也在其中；表达式通常到行尾。",
+			"begin": "(#)(let)(?![\\p{L}\\p{N}_-])",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.embedded.notist" },
+				"2": { "name": "keyword.control.notist" }
+			},
+			"end": "(?=$)",
+			"name": "meta.embedded.let.notist",
+			"patterns": [{ "include": "#code" }]
+		},
+		"embedded-if": {
+			"comment": "#if 条件 { ... } else { ... }（或 [...] Content 分支）。",
+			"begin": "(#)(if)(?![\\p{L}\\p{N}_-])",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.embedded.notist" },
+				"2": { "name": "keyword.control.notist" }
+			},
+			"end": "(?=$)",
+			"name": "meta.embedded.if.notist",
+			"patterns": [{ "include": "#code" }]
+		},
+		"embedded-parenthesized": {
+			"comment": "#(表达式)：括号嵌入完整表达式。TextMate 无法配平嵌套括号，深嵌套时外层 `)` 会提前闭合。",
+			"begin": "(#)(\\()",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.embedded.notist" },
+				"2": { "name": "punctuation.definition.expression.begin.notist" }
+			},
+			"end": "\\)",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.expression.end.notist" }
+			},
+			"name": "meta.embedded.expression.notist",
+			"patterns": [{ "include": "#code" }]
+		},
+		"embedded-identifier": {
+			"comment": "#标识符；：紧跟汉字/字母/数字时用 `;` 或括号结束表达式。",
+			"match": "(#)([\\p{L}][\\p{L}\\p{N}_-]*)(;)?",
+			"captures": {
+				"1": { "name": "punctuation.definition.embedded.notist" },
+				"2": { "name": "variable.other.notist" },
+				"3": { "name": "punctuation.terminator.expression.notist" }
+			}
+		},
+
+		"module-attributes": {
+			"comment": "@![...] 模块属性：文件开头，绑定为根 scope。",
+			"begin": "(@!)(\\[)",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.annotation.notist" },
+				"2": { "name": "punctuation.definition.annotation.begin.notist" }
+			},
+			"end": "\\]",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.annotation.end.notist" }
+			},
+			"name": "meta.annotation.module.notist",
+			"patterns": [{ "include": "#attribute-items" }]
+		},
+		"block-attributes": {
+			"comment": "@[...] 块级前缀标注。",
+			"begin": "(@)(\\[)",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.annotation.notist" },
+				"2": { "name": "punctuation.definition.annotation.begin.notist" }
+			},
+			"end": "\\]",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.annotation.end.notist" }
+			},
+			"name": "meta.annotation.block.notist",
+			"patterns": [{ "include": "#attribute-items" }]
+		},
+		"postfix-annotation": {
+			"comment": "行内 postfix 标注：@ 标识符贴在紧邻元素之后。",
+			"match": "(@)([\\p{L}][\\p{L}\\p{N}_-]*)",
+			"captures": {
+				"1": { "name": "punctuation.definition.annotation.notist" },
+				"2": { "name": "entity.other.attribute-name.notist" }
+			}
+		},
+
+		"attribute-items": {
+			"comment": "属性条目 = id | #tag | .class | key = value（逗号分隔）。",
+			"patterns": [
+				{
+					"comment": "property：key = value，value 是 Code 表达式。",
+					"begin": "([\\p{L}][\\p{L}\\p{N}_-]*)([ \\t]*=[ \\t]*)",
+					"beginCaptures": {
+						"1": { "name": "entity.other.attribute-name.notist" },
+						"2": { "name": "keyword.operator.assignment.notist" }
+					},
+					"end": "(?=[,\\]])",
+					"patterns": [{ "include": "#code" }]
+				},
+				{
+					"match": "(#)([\\p{L}][\\p{L}\\p{N}_-]*)",
+					"captures": {
+						"1": { "name": "punctuation.definition.tag.notist" },
+						"2": { "name": "entity.name.tag.notist" }
+					}
+				},
+				{
+					"match": "(\\.)([\\p{L}][\\p{L}\\p{N}_-]*)",
+					"captures": {
+						"1": { "name": "punctuation.definition.class.notist" },
+						"2": { "name": "entity.other.attribute-name.class.notist" }
+					}
+				},
+				{
+					"comment": "裸 id（排在前面的 pattern 已吃掉 tag/class/key）。",
+					"match": "[\\p{L}][\\p{L}\\p{N}_-]*",
+					"name": "entity.other.attribute-name.id.notist"
+				},
+				{
+					"match": ",",
+					"name": "punctuation.separator.notist"
+				}
+			]
+		},
+
+		"inline-raw": {
+			"comment": "行内 Raw：一对等长 backtick run。end 用反向引用匹配等长闭合。",
+			"begin": "(`+)(?!`)",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.raw.begin.notist" }
+			},
+			"end": "\\1",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.raw.end.notist" }
+			},
+			"name": "markup.inline.raw.notist"
+		},
+
+		"underline": {
+			"match": "(?<![\\w\\\\])(__)(?=\\S)([^_\\n]*?\\S)(__)(?!\\w)",
+			"captures": {
+				"1": { "name": "punctuation.definition.underline.begin.notist" },
+				"2": { "name": "markup.underline.notist" },
+				"3": { "name": "punctuation.definition.underline.end.notist" }
+			}
+		},
+		"strike": {
+			"match": "(?<![\\w\\\\])(~{2})(?=\\S)([^~\\n]*?\\S)(~{2})",
+			"captures": {
+				"1": { "name": "punctuation.definition.strikethrough.begin.notist" },
+				"2": { "name": "markup.strikethrough.notist" },
+				"3": { "name": "punctuation.definition.strikethrough.end.notist" }
+			}
+		},
+		"strong": {
+			"match": "(?<![\\w\\\\])(\\*)(?=\\S)([^*\\n]*?\\S)(\\*)(?!\\*)",
+			"captures": {
+				"1": { "name": "punctuation.definition.bold.begin.notist" },
+				"2": { "name": "markup.bold.notist" },
+				"3": { "name": "punctuation.definition.bold.end.notist" }
+			}
+		},
+		"emphasis": {
+			"comment": "要求 `_` 不贴词字符，避免吃掉 snake_case 式文本。",
+			"match": "(?<![\\w\\\\])(_)(?=\\S)([^_\\n]*?\\S)(_)(?!\\w)",
+			"captures": {
+				"1": { "name": "punctuation.definition.italic.begin.notist" },
+				"2": { "name": "markup.italic.notist" },
+				"3": { "name": "punctuation.definition.italic.end.notist" }
+			}
+		},
+
+		"inline-markup": {
+			"comment": "行内上下文（标题 body 等）：不含行首块构造。",
+			"patterns": [
+				{ "include": "#escape" },
+				{ "include": "#target-reference" },
+				{ "include": "#import" },
+				{ "include": "#embedded-let" },
+				{ "include": "#embedded-if" },
+				{ "include": "#content-block" },
+				{ "include": "#code-block" },
+				{ "include": "#embedded-parenthesized" },
+				{ "include": "#embedded-identifier" },
+				{ "include": "#module-attributes" },
+				{ "include": "#block-attributes" },
+				{ "include": "#postfix-annotation" },
+				{ "include": "#inline-raw" },
+				{ "include": "#underline" },
+				{ "include": "#strike" },
+				{ "include": "#strong" },
+				{ "include": "#emphasis" },
+				{ "include": "#table-pipe" }
+			]
+		},
+
+		"code": {
+			"comment": "Code 模式：字面量、注释、关键字、运算符与调用。",
+			"patterns": [
+				{ "include": "#code-comment-line" },
+				{ "include": "#code-comment-block" },
+				{ "include": "#string-multiline" },
+				{ "include": "#string-raw-multiline" },
+				{ "include": "#string-raw" },
+				{ "include": "#string-quoted" },
+				{ "include": "#code-keywords" },
+				{ "include": "#code-constants" },
+				{ "include": "#code-types" },
+				{ "include": "#code-numeric" },
+				{ "include": "#code-call" },
+				{ "include": "#code-parameter" },
+				{ "include": "#code-braces" },
+				{ "include": "#code-content-block" },
+				{ "include": "#code-operators" },
+				{ "include": "#code-namespace" }
+			]
+		},
+		"code-braces": {
+			"comment": "Code block {...}（分支、块表达式），递归 Code。",
+			"begin": "\\{",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.code-block.begin.notist" }
+			},
+			"end": "\\}",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.code-block.end.notist" }
+			},
+			"name": "meta.code-block.notist",
+			"patterns": [{ "include": "#code" }]
+		},
+		"code-content-block": {
+			"comment": "Content literal [...]：回到 Markup（递归 $base）。",
+			"begin": "\\[",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.content-block.begin.notist" }
+			},
+			"end": "\\]",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.content-block.end.notist" }
+			},
+			"name": "meta.content-block.notist",
+			"patterns": [{ "include": "$base" }]
+		},
+		"code-comment-line": {
+			"match": "//.*$",
+			"name": "comment.line.double-slash.notist"
+		},
+		"code-comment-block": {
+			"comment": "块注释可嵌套：递归 include 自身。",
+			"begin": "/\\*",
+			"beginCaptures": {
+				"0": { "name": "punctuation.definition.comment.begin.notist" }
+			},
+			"end": "\\*/",
+			"endCaptures": {
+				"0": { "name": "punctuation.definition.comment.end.notist" }
+			},
+			"name": "comment.block.notist",
+			"patterns": [{ "include": "#code-comment-block" }]
+		},
+		"string-multiline": {
+			"comment": "\"\"\"...\"\"\" 转义多行（opening 后立即换行才进入多行形态，此处不校验）。",
+			"begin": "(\"\"\")",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.string.begin.notist" }
+			},
+			"end": "(\"\"\")",
+			"endCaptures": {
+				"1": { "name": "punctuation.definition.string.end.notist" }
+			},
+			"name": "string.quoted.double.block.notist",
+			"patterns": [{ "include": "#string-escape" }]
+		},
+		"string-raw-multiline": {
+			"begin": "(r)(#*)(\"\"\")",
+			"beginCaptures": {
+				"1": { "name": "keyword.operator.raw.notist" },
+				"2": { "name": "punctuation.definition.string.notist" },
+				"3": { "name": "punctuation.definition.string.begin.notist" }
+			},
+			"end": "(\"\"\"\\2)",
+			"endCaptures": {
+				"1": { "name": "punctuation.definition.string.end.notist" }
+			},
+			"name": "string.quoted.double.raw.block.notist"
+		},
+		"string-raw": {
+			"begin": "(r)(#*)(\")",
+			"beginCaptures": {
+				"1": { "name": "keyword.operator.raw.notist" },
+				"2": { "name": "punctuation.definition.string.notist" },
+				"3": { "name": "punctuation.definition.string.begin.notist" }
+			},
+			"end": "(\"\\2)",
+			"endCaptures": {
+				"1": { "name": "punctuation.definition.string.end.notist" }
+			},
+			"name": "string.quoted.double.raw.notist"
+		},
+		"string-quoted": {
+			"begin": "(\")",
+			"beginCaptures": {
+				"1": { "name": "punctuation.definition.string.begin.notist" }
+			},
+			"end": "(\")",
+			"endCaptures": {
+				"1": { "name": "punctuation.definition.string.end.notist" }
+			},
+			"name": "string.quoted.double.notist",
+			"patterns": [{ "include": "#string-escape" }]
+		},
+		"string-escape": {
+			"match": "\\\\[\"\\\\nrt]",
+			"name": "constant.character.escape.notist"
+		},
+		"code-keywords": {
+			"patterns": [
+				{
+					"match": "\\b(let|if|else|as|fn|trailing)\\b",
+					"name": "keyword.control.notist"
+				},
+				{
+					"match": "\\b(not|and|or)\\b",
+					"name": "keyword.operator.logical.notist"
+				}
+			]
+		},
+		"code-constants": {
+			"patterns": [
+				{
+					"match": "\\b(true|false)\\b",
+					"name": "constant.language.boolean.notist"
+				},
+				{
+					"match": "\\bnone\\b",
+					"name": "constant.language.null.notist"
+				}
+			]
+		},
+		"code-types": {
+			"match": "\\b(None|Bool|Int|Float|String|Content)\\b",
+			"name": "support.type.notist"
+		},
+		"code-numeric": {
+			"match": "\\b\\d+(\\.\\d+)?\\b",
+			"name": "constant.numeric.notist"
+		},
+		"code-call": {
+			"match": "[\\p{L}_][\\p{L}\\p{N}_-]*(?=\\s*\\()",
+			"name": "entity.name.function.notist"
+		},
+		"code-parameter": {
+			"comment": "形参/命名实参：name: 出现在类型标注或调用点。",
+			"match": "([\\p{L}][\\p{L}\\p{N}_-]*)(\\s*:)",
+			"captures": {
+				"1": { "name": "variable.parameter.notist" },
+				"2": { "name": "punctuation.separator.notist" }
+			}
+		},
+		"code-operators": {
+			"patterns": [
+				{
+					"match": "=>|->|==|!=|<=|>=|=|<|>|\\+|-|\\*|/|\\?|!",
+					"name": "keyword.operator.notist"
+				}
+			]
+		},
+		"code-namespace": {
+			"match": "::",
+			"name": "punctuation.separator.namespace.notist"
+		}
+	},
+
+	"patterns": [
+		{ "include": "#fenced-raw" },
+		{ "include": "#heading" },
+		{ "include": "#heading-empty" },
+		{ "include": "#rule" },
+		{ "include": "#table-delimiter-row" },
+		{ "include": "#task-item-marker" },
+		{ "include": "#list-item-marker" },
+		{ "include": "#inline-markup" },
+		{ "include": "#table-alignment" },
+		{ "include": "#table-pipe" }
+	]
+}

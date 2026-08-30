@@ -1,0 +1,43 @@
+=== 一个 notist 语法覆盖样本
+
+@![#design, status = "draft"]
+
+#import <self::theme>::{warning, accent as highlight}
+
+#let total = 1 + /* 外层 /* 嵌套 */ 注释 */ 2 // 行注释
+
+= 标题 *强调* 与 `代码`
+
+第一段#accent;文字 与 #(1 + 2) 输出。
+
+- 列表项 *加粗* 文本
++ 枚举项
+- [ ] 任务 _斜线_
+- [x] 已完成任务
+
+@[wip]
+== 二级标题 #<vault::intro>
+
+--- 
+
+| a | b |
+| :- | -: |
+| 1 | 2 |
+
+文字内容@note
+
+#[一段内容]@install
+
+```rust
+fn main() {}
+```
+
+行内 raw：Run `cargo test` before publishing.
+
+转义 \# 与 \[ 都是字面。
+
+#let pattern = r#"raw "string" 内容"#
+#let greeting = "escaped \" 引号 \n"
+#let double(x: Int) -> Int = x * 2
+#let add = (a: Int, b: Int) => a + b
+#if total > 0 { warning } else { none }

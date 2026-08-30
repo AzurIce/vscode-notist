@@ -1,0 +1,122 @@
+{
+	"name": "vscode-notist",
+	"displayName": "Notist",
+	"description": ".not knowledge-base support for VS Code: syntax highlighting, language server (diagnostics, completion, navigation) and live preview, powered by `notist lsp`.",
+	"version": "0.1.0",
+	"publisher": "azurice",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/AzurIce/vscode-notist"
+	},
+	"engines": {
+		"vscode": "^1.90.0"
+	},
+	"categories": [
+		"Programming Languages"
+	],
+	"main": "./out/extension.js",
+	"contributes": {
+		"languages": [
+			{
+				"id": "notist",
+				"aliases": [
+					"Notist",
+					"notist"
+				],
+				"extensions": [
+					".not"
+				],
+				"configuration": "./language-configuration.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "notist",
+				"scopeName": "source.notist",
+				"path": "./syntaxes/notist.tmLanguage.json"
+			}
+		],
+		"configuration": {
+			"title": "Notist",
+			"properties": {
+				"notist.server.command": {
+					"type": "string",
+					"default": "notist",
+					"markdownDescription": "Command used to launch the language server. Must ultimately run `notist lsp` (the `lsp` subcommand is appended automatically). Whitespace-separated, so wrapper commands like `nix run .#notist --` work via this field plus `#notist.server.args#`."
+				},
+				"notist.server.args": {
+					"type": "string",
+					"default": "",
+					"markdownDescription": "Extra arguments inserted between the command and the `lsp` subcommand (whitespace-separated). For example `--no-daemon` to keep the server in embedded mode."
+				},
+				"notist.preview.debounceMs": {
+					"type": "number",
+					"default": 500,
+					"minimum": 0,
+					"description": "Debounce applied to re-rendering the preview while typing."
+				}
+			}
+		},
+		"commands": [
+			{
+				"command": "notist.showPreview",
+				"title": "Open Preview",
+				"category": "Notist"
+			},
+			{
+				"command": "notist.showPreviewToSide",
+				"title": "Open Preview to the Side",
+				"category": "Notist"
+			},
+			{
+				"command": "notist.showDocumentReferences",
+				"title": "Show Document References",
+				"category": "Notist"
+			},
+			{
+				"command": "notist.restartServer",
+				"title": "Restart Language Server",
+				"category": "Notist"
+			}
+		],
+		"menus": {
+			"editor/title": [
+				{
+					"command": "notist.showPreviewToSide",
+					"when": "resourceLangId == notist",
+					"group": "navigation"
+				}
+			]
+		},
+		"keybindings": [
+			{
+				"command": "notist.showPreview",
+				"key": "ctrl+shift+v",
+				"when": "editorLangId == notist"
+			},
+			{
+				"command": "notist.showPreviewToSide",
+				"key": "ctrl+k v",
+				"when": "editorLangId == notist"
+			}
+		]
+	},
+	"scripts": {
+		"compile": "tsc -noEmit && node esbuild.config.mjs",
+		"watch": "node esbuild.config.mjs --watch",
+		"package": "node esbuild.config.mjs --production",
+		"tm:smoke": "node scripts/tm-smoke.mjs",
+		"lsp:smoke": "node scripts/lsp-smoke.mjs"
+	},
+	"dependencies": {
+		"vscode-languageclient": "^10.0.0"
+	},
+	"devDependencies": {
+		"@types/node": "^20.14.0",
+		"@types/vscode": "^1.90.0",
+		"esbuild": "^0.25.0",
+		"typescript": "^5.5.0",
+		"vscode-oniguruma": "^2.0.1",
+		"vscode-textmate": "^9.2.0"
+	}
+}
