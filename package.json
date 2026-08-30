@@ -61,12 +61,14 @@
 			{
 				"command": "notist.showPreview",
 				"title": "Open Preview",
-				"category": "Notist"
+				"category": "Notist",
+				"icon": "$(open-preview)"
 			},
 			{
 				"command": "notist.showPreviewToSide",
 				"title": "Open Preview to the Side",
-				"category": "Notist"
+				"category": "Notist",
+				"icon": "$(open-preview)"
 			},
 			{
 				"command": "notist.showDocumentReferences",

@@ -266,14 +266,17 @@ export class PreviewManager implements vscode.Disposable {
 		const nonce = getNonce();
 		const csp = webview.cspSource;
 		const theme = this.themeClass();
-		const dark = theme === "theme-dark";
+		// The site stylesheet keys manual theming off [data-theme] on <html>
+		// (:root[data-theme="dark"] carries the full dark palette) — setting it
+		// makes the preview follow the EDITOR theme instead of the OS-level
+		// prefers-color-scheme the media queries would see.
+		const dataTheme = theme === "theme-dark" ? "dark" : "light";
 		return [
 			"<!DOCTYPE html>",
-			`<html class="${theme}">`,
+			`<html class="${theme}" data-theme="${dataTheme}">`,
 			"<head>",
 			'<meta charset="utf-8">',
 			`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${csp} data:; media-src ${csp}; font-src ${csp} data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">`,
-			`<style>:root { color-scheme: ${dark ? "dark" : "light"}; }</style>`,
 			`<style>${this.loadStyleCss()}</style>`,
 			// The site reserves a fixed topbar via a narrow-viewport body rule;
 			// the editor preview has no topbar.
