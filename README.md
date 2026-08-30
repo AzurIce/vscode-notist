@@ -48,8 +48,8 @@ just tm-smoke         # TextMate grammar 检查
 用编辑器开发宿主调试（编辑器闭包只在 `nix run` 时构建，不进 devShell）：
 
 ```sh
-nix run .# -- ~/path/to/vault   # vscodium + 本扩展（默认走 vscodium，避免 unfree）
-nix run .#vscode -- ~/path/to/vault
+nix run .# -- ~/path/to/vault        # VS Code + 本扩展（unfree 已在 app 内放开）
+nix run .#vscodium -- ~/path/to/vault
 ```
 
 打包：`npx @vscode/vsce package`。
