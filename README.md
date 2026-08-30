@@ -45,15 +45,19 @@ just lsp-smoke        # 对真实 notist lsp 跑协议契约检查
 just tm-smoke         # TextMate grammar 检查
 ```
 
-调试用的编辑器宿主不属于本仓库 flake 的输出，直接跑 nixpkgs 的（先 `bun run compile`）：
+调试用的编辑器宿主不属于本仓库 flake 的输出。`just dev` 是 `nix run` 的快捷方式（先 `bun run compile`）：
+
+```sh
+just dev                        # vscodium + 本扩展，打开当前目录
+just dev vscode ~/path/to/vault # 真 VS Code（unfree 由配方内部放行）
+```
+
+等价的手动命令：
 
 ```sh
 nix run nixpkgs#vscodium -- --extensionDevelopmentPath="$PWD" ~/path/to/vault
-# 或真 VS Code（unfree，需放行）：
 NIXPKGS_ALLOW_UNFREE=1 nix run --impure nixpkgs#vscode -- --extensionDevelopmentPath="$PWD" ~/path/to/vault
 ```
-
-也可以把这条命令包进个人 flake / 桌面快捷方式，随你。
 
 打包：`npx @vscode/vsce package`。
 
