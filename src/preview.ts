@@ -72,6 +72,10 @@ export class PreviewManager implements vscode.Disposable {
 	/** While non-zero, editor visible-range events are echo of our own
 	 * preview→editor reveal and must not scroll the preview back. */
 	private editorSyncLockUntil = 0;
+	/** Rate limit for editor→preview scroll messages (~per animation frame;
+	 * VS Code fires visible-range events far more often while smooth
+	 * scrolling, and each would force a synchronous webview re-scroll). */
+	private lastPreviewScrollSentAt = 0;
 	private styleCss: string | null = null;
 
 	constructor(
@@ -120,6 +124,11 @@ export class PreviewManager implements vscode.Disposable {
 		if (top === undefined) return;
 		const map = this.sourceMap(event.textEditor.document);
 		if (map === null) return;
+		// Intermediate events are safe to drop: the trailing event of any
+		// scroll gesture always carries the final position.
+		const now = Date.now();
+		if (now - this.lastPreviewScrollSentAt < 24) return;
+		this.lastPreviewScrollSentAt = now;
 		this.post(entry, {
 			type: "scrollToByte",
 			byte: map.byteOfPosition({ line: top.line, character: top.character }),
@@ -525,10 +534,17 @@ function webviewScript(): string {
 	function byteAtViewportTop() {
 		if (byTop.length === 0) return null;
 		var top = window.pageYOffset || 0;
-		for (var i = 0; i < byTop.length; i++) {
-			if (byTop[i].top >= top) return byTop[i].byte;
-		}
-		return byTop[byTop.length - 1].byte;
+		var i = 0;
+		while (i < byTop.length && byTop[i].top < top) i++;
+		if (i === 0) return byTop[0].byte;
+		if (i === byTop.length) return byTop[byTop.length - 1].byte;
+		// Interpolate between the surrounding elements so the reported byte
+		// moves sub-element smoothly instead of snapping to element starts.
+		var a = byTop[i - 1];
+		var b = byTop[i];
+		var spanPx = b.top - a.top;
+		if (spanPx <= 0) return a.byte;
+		return a.byte + (b.byte - a.byte) * ((top - a.top) / spanPx);
 	}
 
 	function decodeUrl(url) {
@@ -620,9 +636,17 @@ function webviewScript(): string {
 			if (typeof message.byte !== 'number') return;
 			var target = topForByte(message.byte);
 			if (target === null) return;
-			// Our own scroll event would echo back as previewScrolled.
+			// Our own scroll event would echo back as previewScrolled. The
+			// site stylesheet sets scroll-behavior:smooth on html, which would
+			// turn programmatic scrollTo into an animation — the animation's
+			// trailing events outlive any echo lock and drag the editor back,
+			// so force instant.
 			suppressScrollUntil = Date.now() + 250;
-			window.scrollTo(0, target);
+			try {
+				window.scrollTo({ top: target, behavior: 'instant' });
+			} catch (e) {
+				window.scrollTo(0, target);
+			}
 		}
 	});
 
