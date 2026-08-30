@@ -102,11 +102,11 @@
 		]
 	},
 	"scripts": {
-		"compile": "tsc -noEmit && node esbuild.config.mjs",
-		"watch": "node esbuild.config.mjs --watch",
-		"package": "node esbuild.config.mjs --production",
-		"tm:smoke": "node scripts/tm-smoke.mjs",
-		"lsp:smoke": "node scripts/lsp-smoke.mjs"
+		"compile": "bun x tsc -noEmit && bun esbuild.config.mjs",
+		"watch": "bun esbuild.config.mjs --watch",
+		"package": "bun esbuild.config.mjs --production",
+		"tm:smoke": "bun scripts/tm-smoke.mjs",
+		"lsp:smoke": "bun scripts/lsp-smoke.mjs"
 	},
 	"dependencies": {
 		"vscode-languageclient": "^10.0.0"

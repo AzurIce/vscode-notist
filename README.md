@@ -39,8 +39,8 @@ server 本身不消费任何客户端配置；修改 `notist.server.*` 会自动
 
 ```sh
 direnv allow          # 或 nix develop
-npm install
-npm run compile       # tsc + esbuild → out/extension.js
+bun install
+bun run compile       # tsc + esbuild → out/extension.js
 just lsp-smoke        # 对真实 notist lsp 跑协议契约检查
 just tm-smoke         # TextMate grammar 检查
 ```
