@@ -5,4 +5,4 @@
 - 版本观：项目未发布过任何版本，不用 v1/v2 指代迭代；引用历史状态用日期或 commit hash。第三方产品自身版本号不受限（如 VS Code 1.90）。
 - 语法变更时同步：TextMate grammar（`syntaxes/notist.tmLanguage.json`）是从 tree-sitter-notist 的 grammar/queries 移植的近似，上游文法变了要对照 `scripts/fixtures/sample.not` 与 `just tm-smoke` 更新；不追求 token 级等价，但构造覆盖要一致。
 - LSP 契约记录在 `src/protocol.ts` 头注释（对齐 `crates/notist-cli/src/lsp.rs`），上游 LSP 变更时逐条核对，并跑 `just lsp-smoke`（对真实 `notist lsp`）回归。
-- 构建链：bun 是唯一工具链（对齐 obsidian-notist，devShell 不含 nodejs）；tsc 只做类型检查（`bun x tsc -noEmit`），产物由 esbuild 打包（CJS，external: vscode），最终跑在 VS Code 的 Node 扩展宿主里；`out/` 与 `node_modules/` 不进 git。flake 只提供 devShell（bun/git/just）与开发宿主 app（编辑器闭包只在 `nix run` 时构建）；`assets/site/` 是从 notist 构建产物拷贝的站点样式，来源与刷新方式见其 `UPSTREAM.txt`。
+- 构建链：bun 是唯一工具链（对齐 obsidian-notist，devShell 不含 nodejs）；tsc 只做类型检查（`bun x tsc -noEmit`），产物由 esbuild 打包（CJS，external: vscode），最终跑在 VS Code 的 Node 扩展宿主里；`out/` 与 `node_modules/` 不进 git。flake 只提供 devShell（bun/git/just）——编辑器宿主不是本仓库的输出，调试按 README 用 `nix run nixpkgs#vscodium` 或个人 flake；`assets/site/` 是从 notist 构建产物拷贝的站点样式，来源与刷新方式见其 `UPSTREAM.txt`。
