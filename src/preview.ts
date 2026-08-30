@@ -6,6 +6,13 @@
  * re-renders and click interception all live in the webview script below,
  * mirroring what obsidian-notist does inside its iframe document.
  *
+ * Scroll sync and click-to-source follow the tinymist approach: the renderer
+ * tags every block element with `data-notist-start`/`-end` (UTF-8 byte offsets
+ * into the module source, see crates/notist-html range_attributes_range), so
+ * the host only needs a byte↔LSP-position conversion (src/source-map.ts) and
+ * the webview keeps a byte→offsetTop index over those attributes. No upstream
+ * changes, element-accurate in both directions.
+ *
  * The vendored site stylesheet (assets/site/style.css) makes the panel show
  * literally what `notist build`/`notist preview` would produce, wrapped in
  * the site's `.page-body > .page-main > article.notist-document` shell.
@@ -15,6 +22,7 @@
  */
 import * as vscode from "vscode";
 import * as fs from "node:fs";
+import { SourceMap } from "./source-map";
 import type { RenderDocumentResult, RenderedResource } from "./protocol";
 
 /** Outcome of one render attempt, already reduced to user-presentable shape. */
@@ -27,20 +35,43 @@ export type RenderFn = (
 	token: vscode.CancellationToken,
 ) => Promise<RenderOutcome>;
 
+/** Everything the host can post into the webview. Only `update`/`notice`
+ * become `pending` (replayed when the webview loads); `config`/`scrollToByte`
+ * are fire-and-forget. */
+type PanelPayload =
+	| {
+			type: "update";
+			fragment: string;
+			pageSegments: string[];
+			resources: Record<string, string>;
+			clickToSource: boolean;
+	  }
+	| { type: "notice"; text: string }
+	| { type: "config"; clickToSource: boolean }
+	| { type: "scrollToByte"; byte: number };
+
 interface PanelEntry {
 	panel: vscode.WebviewPanel;
 	uri: vscode.Uri;
-	/** Last posted payload (update or notice), replayed when the webview
+	/** Last posted `update`/`notice` payload, replayed when the webview
 	 * (re)loads and announces `ready` — postMessage is silently dropped while
 	 * the webview document is still loading, so the first render would
 	 * otherwise race the load and leave the panel blank. */
-	pending: Record<string, unknown> | null;
+	pending: PanelPayload | null;
 	debounce: NodeJS.Timeout | undefined;
 	cancels: vscode.CancellationTokenSource;
 }
 
+const toPosition = (p: { line: number; character: number }): vscode.Position =>
+	new vscode.Position(p.line, p.character);
+
 export class PreviewManager implements vscode.Disposable {
 	private readonly entries = new Map<string, PanelEntry>();
+	/** uri → byte↔position map, invalidated by document version. */
+	private readonly sourceMaps = new Map<string, { version: number; map: SourceMap }>();
+	/** While non-zero, editor visible-range events are echo of our own
+	 * preview→editor reveal and must not scroll the preview back. */
+	private editorSyncLockUntil = 0;
 	private styleCss: string | null = null;
 
 	constructor(
@@ -51,8 +82,59 @@ export class PreviewManager implements vscode.Disposable {
 			vscode.workspace.onDidChangeTextDocument((event) =>
 				this.onDocumentChanged(event),
 			),
+			vscode.window.onDidChangeTextEditorVisibleRanges((event) =>
+				this.onEditorScrolled(event),
+			),
+			vscode.workspace.onDidChangeConfiguration((event) =>
+				this.onConfigChanged(event),
+			),
 			vscode.window.onDidChangeActiveColorTheme(() => this.retheme()),
 		);
+	}
+
+	private cfgBool(
+		name: "scrollPreviewWithEditor" | "scrollEditorWithPreview" | "clickToSource",
+		fallback: boolean,
+	): boolean {
+		return vscode.workspace.getConfiguration("notist").get(`preview.${name}`, fallback);
+	}
+
+	/** Byte↔position map for the live document, cached per version. */
+	private sourceMap(doc: vscode.TextDocument): SourceMap | null {
+		const key = doc.uri.toString();
+		const cached = this.sourceMaps.get(key);
+		if (cached !== undefined && cached.version === doc.version) return cached.map;
+		const map = SourceMap.fromText(doc.getText());
+		this.sourceMaps.set(key, { version: doc.version, map });
+		return map;
+	}
+
+	/** Editor scrolled → scroll the preview to the element owning the first
+	 * visible source byte. */
+	private onEditorScrolled(event: vscode.TextEditorVisibleRangesChangeEvent): void {
+		const entry = this.entries.get(event.textEditor.document.uri.toString());
+		if (entry === undefined || entry.pending?.type !== "update") return;
+		if (!this.cfgBool("scrollPreviewWithEditor", true)) return;
+		if (Date.now() < this.editorSyncLockUntil) return;
+		const top = event.visibleRanges[0]?.start;
+		if (top === undefined) return;
+		const map = this.sourceMap(event.textEditor.document);
+		if (map === null) return;
+		this.post(entry, {
+			type: "scrollToByte",
+			byte: map.byteOfPosition({ line: top.line, character: top.character }),
+		});
+	}
+
+	private onConfigChanged(event: vscode.ConfigurationChangeEvent): void {
+		if (!event.affectsConfiguration("notist.preview")) return;
+		const payload: PanelPayload = {
+			type: "config",
+			clickToSource: this.cfgBool("clickToSource", true),
+		};
+		for (const entry of this.entries.values()) {
+			this.post(entry, payload);
+		}
 	}
 
 	dispose(): void {
@@ -102,6 +184,7 @@ export class PreviewManager implements vscode.Disposable {
 			entry.cancels.cancel();
 			if (entry.debounce !== undefined) clearTimeout(entry.debounce);
 			this.entries.delete(key);
+			this.sourceMaps.delete(key);
 		});
 		void this.renderInto(entry);
 	}
@@ -114,7 +197,13 @@ export class PreviewManager implements vscode.Disposable {
 
 	private onPanelMessage(entry: PanelEntry, message: unknown): void {
 		if (typeof message !== "object" || message === null) return;
-		const data = message as { type?: string; path?: unknown };
+		const data = message as {
+			type?: string;
+			path?: unknown;
+			byte?: unknown;
+			start?: unknown;
+			end?: unknown;
+		};
 		if (data.type === "openModule" && typeof data.path === "string") {
 			void this.openModulePath(data.path);
 			return;
@@ -127,6 +216,70 @@ export class PreviewManager implements vscode.Disposable {
 			} else {
 				void this.renderInto(entry);
 			}
+			return;
+		}
+		if (data.type === "jumpToSource") {
+			const start = data.start;
+			const end = data.end;
+			if (typeof start === "number" && Number.isFinite(start)) {
+				const endByte = typeof end === "number" && Number.isFinite(end) ? end : start;
+				void this.revealSource(entry, start, Math.max(start, endByte), "center");
+			}
+			return;
+		}
+		if (data.type === "previewScrolled") {
+			const byte = data.byte;
+			if (typeof byte !== "number" || !Number.isFinite(byte)) return;
+			if (!this.cfgBool("scrollEditorWithPreview", true)) return;
+			// The reveal below echoes back as a visible-range change; lock the
+			// editor→preview direction out of it.
+			this.editorSyncLockUntil = Date.now() + 250;
+			const doc = vscode.workspace.textDocuments.find(
+				(d) => d.uri.toString() === entry.uri.toString(),
+			);
+			if (doc === undefined) return;
+			const pos = this.sourceMap(doc)?.position(byte);
+			if (pos === undefined) return;
+			const editor = vscode.window.visibleTextEditors.find(
+				(e) => e.document.uri.toString() === entry.uri.toString(),
+			);
+			// Viewport only — no selection, no focus steal.
+			editor?.revealRange(new vscode.Range(toPosition(pos), toPosition(pos)), vscode.TextEditorRevealType.AtTop);
+		}
+	}
+
+	/** Preview click → reveal the element's source range. Only moves the
+	 * viewport (and the cursor when the editor is visible), never focus. */
+	private async revealSource(
+		entry: PanelEntry,
+		startByte: number,
+		endByte: number,
+		behavior: "center" | "top",
+	): Promise<void> {
+		const doc = await vscode.workspace.openTextDocument(entry.uri);
+		const map = this.sourceMap(doc);
+		if (map === null) return;
+		const start = map.position(startByte);
+		const range = new vscode.Range(
+			toPosition(start),
+			toPosition(map.position(Math.max(startByte, endByte))),
+		);
+		const editor = vscode.window.visibleTextEditors.find(
+			(e) => e.document.uri.toString() === entry.uri.toString(),
+		);
+		if (editor !== undefined) {
+			editor.selection = new vscode.Selection(toPosition(start), toPosition(start));
+			editor.revealRange(
+				range,
+				behavior === "center"
+					? vscode.TextEditorRevealType.InCenterIfOutsideViewport
+					: vscode.TextEditorRevealType.AtTop,
+			);
+		} else {
+			await vscode.window.showTextDocument(doc, {
+				selection: new vscode.Selection(toPosition(start), toPosition(start)),
+				preserveFocus: true,
+			});
 		}
 	}
 
@@ -190,11 +343,12 @@ export class PreviewManager implements vscode.Disposable {
 			return;
 		}
 
-		const payload = {
+		const payload: PanelPayload = {
 			type: "update",
 			fragment: result.page.fragment,
 			pageSegments: result.page.moduleSegments,
 			resources: this.resourceMap(entry.panel.webview, result),
+			clickToSource: this.cfgBool("clickToSource", true),
 		};
 		entry.pending = payload;
 		this.post(entry, payload);
@@ -234,7 +388,7 @@ export class PreviewManager implements vscode.Disposable {
 		return null;
 	}
 
-	private post(entry: PanelEntry, payload: Record<string, unknown>): void {
+	private post(entry: PanelEntry, payload: PanelPayload): void {
 		void entry.panel.webview.postMessage(payload);
 	}
 
@@ -326,6 +480,57 @@ function webviewScript(): string {
 	var article = document.getElementById('notist-article');
 	var notice = document.getElementById('notist-notice');
 
+	// Scroll-sync index over [data-notist-start] (UTF-8 byte offsets into the
+	// module source, emitted by the notist-html renderer): byte→top for
+	// editor-driven scrolls, top→byte for preview-driven ones.
+	var index = [];
+	var byTop = [];
+	var suppressScrollUntil = 0;
+	var scrollScheduled = false;
+	var clickToSource = false;
+
+	function rebuildIndex() {
+		index.length = 0;
+		var els = article.querySelectorAll('[data-notist-start]');
+		var currentScroll = window.pageYOffset || 0;
+		for (var i = 0; i < els.length; i++) {
+			var el = els[i];
+			var b = parseInt(el.getAttribute('data-notist-start'), 10);
+			if (isNaN(b)) continue;
+			index.push({ byte: b, top: el.getBoundingClientRect().top + currentScroll });
+		}
+		index.sort(function (a, b) { return a.byte - b.byte; });
+		byTop = index.slice().sort(function (a, b) { return a.top - b.top; });
+	}
+
+	function topForByte(byte) {
+		if (index.length === 0) return null;
+		if (byte <= index[0].byte) return index[0].top;
+		var last = index[index.length - 1];
+		if (byte >= last.byte) return last.top;
+		var lo = 0;
+		var hi = index.length - 1;
+		while (lo < hi) {
+			var mid = (lo + hi + 1) >> 1;
+			if (index[mid].byte <= byte) lo = mid;
+			else hi = mid - 1;
+		}
+		var a = index[lo];
+		var b = index[Math.min(lo + 1, index.length - 1)];
+		var span = b.byte - a.byte;
+		if (span <= 0) return a.top;
+		return a.top + (b.top - a.top) * ((byte - a.byte) / span);
+	}
+
+	function byteAtViewportTop() {
+		if (byTop.length === 0) return null;
+		var top = window.pageYOffset || 0;
+		for (var i = 0; i < byTop.length; i++) {
+			if (byTop[i].top >= top) return byTop[i].byte;
+		}
+		return byTop[byTop.length - 1].byte;
+	}
+
 	function decodeUrl(url) {
 		var withoutHash = url.split('#')[0];
 		if (/^(https?|data|blob|mailto|file):/i.test(withoutHash)) return null;
@@ -398,6 +603,8 @@ function webviewScript(): string {
 		article.innerHTML = payload.fragment;
 		rewrite(article, payload);
 		if (scroller) scroller.scrollTop = top;
+		if (typeof payload.clickToSource === 'boolean') clickToSource = payload.clickToSource;
+		rebuildIndex();
 	}
 
 	window.addEventListener('message', function (event) {
@@ -407,15 +614,53 @@ function webviewScript(): string {
 		else if (message.type === 'notice') {
 			notice.textContent = message.text;
 			notice.hidden = false;
+		} else if (message.type === 'config') {
+			if (typeof message.clickToSource === 'boolean') clickToSource = message.clickToSource;
+		} else if (message.type === 'scrollToByte') {
+			if (typeof message.byte !== 'number') return;
+			var target = topForByte(message.byte);
+			if (target === null) return;
+			// Our own scroll event would echo back as previewScrolled.
+			suppressScrollUntil = Date.now() + 250;
+			window.scrollTo(0, target);
 		}
+	});
+
+	// Preview scrolled by the user → report the byte at the viewport top.
+	window.addEventListener('scroll', function () {
+		if (Date.now() < suppressScrollUntil || scrollScheduled) return;
+		scrollScheduled = true;
+		requestAnimationFrame(function () {
+			scrollScheduled = false;
+			var byte = byteAtViewportTop();
+			if (byte === null) return;
+			vscode.postMessage({ type: 'previewScrolled', byte: byte });
+		});
 	});
 
 	document.addEventListener('click', function (event) {
 		var target = event.target;
 		var anchor = target && target.closest ? target.closest('a[data-notist-module]') : null;
-		if (!anchor) return;
-		event.preventDefault();
-		vscode.postMessage({ type: 'openModule', path: anchor.getAttribute('data-notist-module') });
+		if (anchor) {
+			event.preventDefault();
+			vscode.postMessage({ type: 'openModule', path: anchor.getAttribute('data-notist-module') });
+			return;
+		}
+		if (!clickToSource || !target || !target.closest) return;
+		// Real links keep their behavior; selecting text is not a jump.
+		if (event.defaultPrevented || target.closest('a[href]')) return;
+		var selection = window.getSelection();
+		if (selection && String(selection).length > 0) return;
+		var el = target.closest('[data-notist-start]');
+		if (!el) return;
+		var start = parseInt(el.getAttribute('data-notist-start'), 10);
+		if (isNaN(start)) return;
+		var end = parseInt(el.getAttribute('data-notist-end'), 10);
+		vscode.postMessage({
+			type: 'jumpToSource',
+			start: start,
+			end: isNaN(end) ? start : end,
+		});
 	});
 
 	// Announce readiness: the host replays the latest payload, which covers

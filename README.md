@@ -12,6 +12,7 @@
   - 补全（`[` `:` `#` `(` `,` `<` `/` 触发）、hover、definition / references、文档与工作区符号
   - 实验方法 `notist/documentReferences`（命令 **Notist: Show Document References**，按模块整体查询引用）
 - **预览**：命令 **Notist: Open Preview**（`ctrl+shift+v`）/ **Open Preview to the Side**（`ctrl+k v`）。走实验方法 `notist/renderDocument`，与 `notist build` / `notist preview` 同一渲染管线；输入时 500ms 防抖重渲，保留滚动位置，资源链接改写到工作区文件，模块页锚点可点击跳转到对应 `.not` 源文件。主题跟随编辑器明暗。
+- **滚动同步与点击跳源码**：渲染器的 `data-notist-start/end` 字节属性（SyncTeX 式思路）驱动双向同步——编辑器滚动跟预览、预览滚动跟编辑器（只动视口，不抢焦点）、点击预览元素跳到源码对应位置。三个方向各有开关（`notist.preview.scrollPreviewWithEditor` / `scrollEditorWithPreview` / `clickToSource`）。
   - 已知差距：插件 web 组件（mermaid 等）未加载，相关片段降级为静态内容。
 
 ## 前置条件
@@ -32,6 +33,9 @@ cargo install --locked --git https://github.com/AzurIce/Notist.git notist-cli
 | `notist.server.command` | `notist` | 启动 LSP 的命令 |
 | `notist.server.args` | （空） | 插在命令与 `lsp` 子命令之间的参数，如 `--no-daemon` |
 | `notist.preview.debounceMs` | `500` | 输入防抖 |
+| `notist.preview.scrollPreviewWithEditor` | `true` | 编辑器滚动带动预览 |
+| `notist.preview.scrollEditorWithPreview` | `true` | 预览滚动带动编辑器 |
+| `notist.preview.clickToSource` | `true` | 点击预览跳到源码位置 |
 
 server 本身不消费任何客户端配置；修改 `notist.server.*` 会自动重启 server。
 

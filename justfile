@@ -15,6 +15,10 @@ fetch-site-assets:
 tm-smoke:
     bun scripts/tm-smoke.mjs
 
+# Byte↔position conversion round-trip (CJK / emoji / surrogate pairs)
+sourcemap-smoke:
+    bun scripts/sourcemap-smoke.mjs
+
 # Drive a real `notist lsp` end-to-end (FULL sync, diagnostics, render…)
 # Optional arg: path to the notist binary.
 lsp-smoke NOTIST_BIN='':

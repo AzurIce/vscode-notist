@@ -54,6 +54,21 @@
 					"default": 500,
 					"minimum": 0,
 					"description": "Debounce applied to re-rendering the preview while typing."
+				},
+				"notist.preview.scrollPreviewWithEditor": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "Scroll the preview as the editor scrolls (element-accurate via the renderer's `data-notist-start` offsets)."
+				},
+				"notist.preview.scrollEditorWithPreview": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "Scroll the editor as the preview scrolls (viewport only — no cursor or focus changes)."
+				},
+				"notist.preview.clickToSource": {
+					"type": "boolean",
+					"default": true,
+					"markdownDescription": "Click in the preview to jump to the corresponding source position."
 				}
 			}
 		},
@@ -109,7 +124,8 @@
 		"watch": "bun esbuild.config.mjs --watch",
 		"package": "bun esbuild.config.mjs --production",
 		"tm:smoke": "bun scripts/tm-smoke.mjs",
-		"lsp:smoke": "bun scripts/lsp-smoke.mjs"
+		"lsp:smoke": "bun scripts/lsp-smoke.mjs",
+		"sourcemap:smoke": "bun scripts/sourcemap-smoke.mjs"
 	},
 	"dependencies": {
 		"vscode-languageclient": "^10.0.0"
