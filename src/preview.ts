@@ -30,8 +30,11 @@ export type RenderFn = (
 interface PanelEntry {
 	panel: vscode.WebviewPanel;
 	uri: vscode.Uri;
-	/** Latest payload, replayed after theme switches rebuild the shell. */
-	lastPayload: Record<string, unknown> | null;
+	/** Last posted payload (update or notice), replayed when the webview
+	 * (re)loads and announces `ready` — postMessage is silently dropped while
+	 * the webview document is still loading, so the first render would
+	 * otherwise race the load and leave the panel blank. */
+	pending: Record<string, unknown> | null;
 	debounce: NodeJS.Timeout | undefined;
 	cancels: vscode.CancellationTokenSource;
 }
@@ -83,7 +86,7 @@ export class PreviewManager implements vscode.Disposable {
 		const entry: PanelEntry = {
 			panel,
 			uri: target,
-			lastPayload: null,
+			pending: null,
 			debounce: undefined,
 			cancels: new vscode.CancellationTokenSource(),
 		};
@@ -114,6 +117,16 @@ export class PreviewManager implements vscode.Disposable {
 		const data = message as { type?: string; path?: unknown };
 		if (data.type === "openModule" && typeof data.path === "string") {
 			void this.openModulePath(data.path);
+			return;
+		}
+		if (data.type === "ready") {
+			// The webview script just installed its listeners; anything we
+			// posted earlier may have been dropped mid-load — replay it.
+			if (entry.pending !== null) {
+				this.post(entry, entry.pending);
+			} else {
+				void this.renderInto(entry);
+			}
 		}
 	}
 
@@ -163,15 +176,17 @@ export class PreviewManager implements vscode.Disposable {
 		if (source.token.isCancellationRequested) return;
 
 		if (!outcome.ok) {
-			this.post(entry, { type: "notice", text: outcome.message });
+			entry.pending = { type: "notice", text: outcome.message };
+			this.post(entry, entry.pending);
 			return;
 		}
 		const { result } = outcome;
 		if (result.page === null) {
-			this.post(entry, {
+			entry.pending = {
 				type: "notice",
 				text: "This document is not part of a Notist vault (no Notist.toml above it).",
-			});
+			};
+			this.post(entry, entry.pending);
 			return;
 		}
 
@@ -181,7 +196,7 @@ export class PreviewManager implements vscode.Disposable {
 			pageSegments: result.page.moduleSegments,
 			resources: this.resourceMap(entry.panel.webview, result),
 		};
-		entry.lastPayload = payload;
+		entry.pending = payload;
 		this.post(entry, payload);
 		if (result.page.title) {
 			entry.panel.title = `Preview: ${result.page.title}`;
@@ -235,7 +250,7 @@ export class PreviewManager implements vscode.Disposable {
 	private retheme(): void {
 		for (const entry of this.entries.values()) {
 			entry.panel.webview.html = this.composeShell(entry.panel.webview);
-			if (entry.lastPayload !== null) this.post(entry, entry.lastPayload);
+			if (entry.pending !== null) this.post(entry, entry.pending);
 		}
 	}
 
@@ -373,6 +388,7 @@ function webviewScript(): string {
 	}
 
 	function apply(payload) {
+		if (!payload || typeof payload.fragment !== 'string') return;
 		notice.hidden = true;
 		var scroller = document.scrollingElement;
 		var top = scroller ? scroller.scrollTop : 0;
@@ -398,6 +414,10 @@ function webviewScript(): string {
 		event.preventDefault();
 		vscode.postMessage({ type: 'openModule', path: anchor.getAttribute('data-notist-module') });
 	});
+
+	// Announce readiness: the host replays the latest payload, which covers
+	// messages dropped while this document was still loading.
+	vscode.postMessage({ type: 'ready' });
 }());
 `;
 }
