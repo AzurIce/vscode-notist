@@ -41,11 +41,20 @@ server 本身不消费任何客户端配置；修改 `notist.server.*` 会自动
 direnv allow          # 或 nix develop
 bun install
 bun run compile       # tsc + esbuild → out/extension.js
-just lsp-smoke        # 对真实 notist lsp 跑协议契约检查
+just lsp-smoke        # 对真实 notist lsp 跑协议契约检查（notist 由 devShell 提供）
 just tm-smoke         # TextMate grammar 检查
 ```
 
-调试用的编辑器宿主不属于本仓库 flake 的输出。`just dev` 是 `nix run` 的快捷方式（先 `bun run compile`）：
+devShell 自带 notist 二进制：flake input `notist` = `github:AzurIce/Notist`，rev 钉在
+flake.lock（`nix flake update notist` 升级，与 zed-notist 钉 grammar rev 同一套路）。
+要针对本地 notist 检出调试时：
+
+```sh
+nix develop --override-input notist "git+file:$NOTIST_PATH"
+```
+
+调试用的编辑器宿主不属于本仓库 flake 的输出。`just dev` 是 `nix run` 的快捷方式，并用
+`nix develop -c` 包装让编辑器继承 devShell 的 PATH（含 notist）；先 `bun run compile`：
 
 ```sh
 just dev                        # vscodium + 本扩展，打开当前目录
@@ -55,8 +64,8 @@ just dev vscode ~/path/to/vault # 真 VS Code（unfree 由配方内部放行）
 等价的手动命令：
 
 ```sh
-nix run nixpkgs#vscodium -- --extensionDevelopmentPath="$PWD" ~/path/to/vault
-NIXPKGS_ALLOW_UNFREE=1 nix run --impure nixpkgs#vscode -- --extensionDevelopmentPath="$PWD" ~/path/to/vault
+nix develop -c nix run nixpkgs#vscodium -- --extensionDevelopmentPath="$PWD" ~/path/to/vault
+NIXPKGS_ALLOW_UNFREE=1 nix develop -c nix run --impure nixpkgs#vscode -- --extensionDevelopmentPath="$PWD" ~/path/to/vault
 ```
 
 打包：`npx @vscode/vsce package`。

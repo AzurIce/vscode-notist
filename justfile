@@ -21,7 +21,8 @@ lsp-smoke NOTIST_BIN='':
     bun scripts/lsp-smoke.mjs {{NOTIST_BIN}}
 
 # 开发宿主：加载本扩展打开 vault（editor: vscodium(默认) | vscode）
-# 编辑器不是本仓库 flake 的输出——这只是 nix run nixpkgs 的快捷方式。
+# 编辑器不是本仓库 flake 的输出——这只是 nix run nixpkgs 的快捷方式；
+# nix develop -c 让它继承 devShell 的 PATH（含 notist，扩展据此拉起 LSP）。
 dev editor='vscodium' vault='.':
     #!/usr/bin/env bash
     set -euo pipefail
@@ -31,11 +32,11 @@ dev editor='vscodium' vault='.':
     fi
     case "{{editor}}" in
         vscode)
-            NIXPKGS_ALLOW_UNFREE=1 exec nix run --impure nixpkgs#vscode -- \
+            NIXPKGS_ALLOW_UNFREE=1 exec nix develop -c nix run --impure nixpkgs#vscode -- \
                 --extensionDevelopmentPath="$PWD" "{{vault}}"
             ;;
         vscodium)
-            exec nix run nixpkgs#vscodium -- --extensionDevelopmentPath="$PWD" "{{vault}}"
+            exec nix develop -c nix run nixpkgs#vscodium -- --extensionDevelopmentPath="$PWD" "{{vault}}"
             ;;
         *)
             echo "unknown editor: {{editor}} (use vscodium | vscode)" >&2
