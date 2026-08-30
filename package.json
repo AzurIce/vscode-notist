@@ -84,7 +84,8 @@
 				{
 					"command": "notist.showPreviewToSide",
 					"when": "resourceLangId == notist",
-					"group": "navigation"
+					"group": "navigation",
+					"icon": "$(open-preview)"
 				}
 			]
 		},
