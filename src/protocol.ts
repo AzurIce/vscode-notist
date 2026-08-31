@@ -1,13 +1,18 @@
 /**
  * Type surface for notist's experimental LSP extensions. Everything standard
- * (FULL sync, utf-16 positions, hover/completion/definition/references/symbols,
+ * (INCREMENTAL sync, utf-16 positions, hover/completion/definition/references/symbols,
  * push diagnostics) is handled by vscode-languageclient off the server's
  * declared capabilities — only the `notist/*` methods need hand-written types.
  *
- * Server contract these rely on (crates/notist-cli/src/lsp.rs @ d4f4df0):
- * - FULL sync, strictly: didChange carries exactly one range-less change with
- *   the full text; versions must be monotonic. Violations only log server-side.
- * - Position encoding negotiates to utf-16 when offered (the default here).
+ * Server contract these rely on (crates/notist-cli/src/lsp.rs, 2026-08-30
+ * incremental-sync state):
+ * - INCREMENTAL sync: the server accepts the ranged edits
+ *   vscode-languageclient derives from document version changes, as well as
+ *   whole-document replacements and mixed batches (applied in order).
+ *   Versions are informational only; changes for unopened documents are
+ *   dropped server-side.
+ * - Position encoding: the server speaks utf-8 only and refuses sessions
+ *   that do not offer it (vscode-languageclient converts transparently).
  * - Diagnostics are pushed: baseline right after initialize, then deltas.
  * - `notist/renderDocument` renders the module OWNING the document (page is
  *   null for non-.not documents or documents outside any vault); `revision`

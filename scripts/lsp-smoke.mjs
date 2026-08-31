@@ -1,9 +1,9 @@
 /**
  * End-to-end smoke test against a real `notist lsp` process: the whole
  * surface the VSCode extension relies on — initialize/utf-16 negotiation,
- * FULL-sync didOpen, push diagnostics, hover, completion, and the two
- * experimental methods (renderDocument, documentReferences) — exercised over
- * stdio JSON-RPC. Usage:
+ * INCREMENTAL didChange (ranged and whole-document), push diagnostics, hover,
+ * completion, and the two experimental methods (renderDocument,
+ * documentReferences) — exercised over stdio JSON-RPC. Usage:
  *
  *   node scripts/lsp-smoke.mjs [path-to-notist] [vault-dir]
  *
@@ -140,7 +140,7 @@ try {
 		processId: process.pid,
 		rootUri: `file://${vault}`,
 		capabilities: {
-			general: { positionEncodings: ["utf-16"] },
+			general: { positionEncodings: ["utf-8"] },
 			textDocument: {
 				synchronization: { dynamicRegistration: false, didSave: false },
 				completion: { completionItem: { snippetSupport: false } },
@@ -150,9 +150,15 @@ try {
 	});
 	check("initialize", init?.serverInfo?.name === "notist", JSON.stringify(init?.serverInfo));
 	check(
-		"FULL sync capability",
-		init?.capabilities?.textDocumentSync === 1,
-		`textDocumentSync=${init?.capabilities?.textDocumentSync}`,
+		"utf-8 position encoding",
+		init?.capabilities?.positionEncoding === "utf-8",
+		`positionEncoding=${init?.capabilities?.positionEncoding}`,
+	);
+	check(
+		"INCREMENTAL sync capability",
+		init?.capabilities?.textDocumentSync?.change === 2 &&
+			init?.capabilities?.textDocumentSync?.openClose === true,
+		`textDocumentSync=${JSON.stringify(init?.capabilities?.textDocumentSync)}`,
 	);
 	const experimental = init?.capabilities?.experimental?.notist ?? {};
 	check("renderDocument capability", typeof experimental.renderDocument === "object");
@@ -184,6 +190,31 @@ try {
 		"completion returns array",
 		completion === null || Array.isArray(completion) || Array.isArray(completion.items),
 	);
+
+	// INCREMENTAL sync: a ranged edit whose positions sit past the document
+	// end clamps there, appending a line. The new diagnostic proves the
+	// overlay rebuild consumed the ranged edit.
+	const endLine = docText.split("\n").length;
+	notify("textDocument/didChange", {
+		textDocument: { uri: docUri, version: 2 },
+		contentChanges: [
+			{
+				range: {
+					start: { line: endLine, character: 0 },
+					end: { line: endLine, character: 0 },
+				},
+				text: "\n#smokemissing[]\n",
+			},
+		],
+	});
+	await waitForNotification(
+		"textDocument/publishDiagnostics",
+		30000,
+		(n) =>
+			n.params.uri === docUri &&
+			n.params.diagnostics.some((d) => d.message === "unknown function `smokemissing`"),
+	);
+	check("incremental didChange applied", true);
 
 	// Experimental: render the module owning the doc.
 	const render = await send("notist/renderDocument", {
@@ -220,9 +251,10 @@ try {
 		);
 	}
 
-	// FULL-sync didChange with exactly one range-less change.
+	// Whole-document change (still accepted under INCREMENTAL) restores the
+	// original buffer text.
 	notify("textDocument/didChange", {
-		textDocument: { uri: docUri, version: 2 },
+		textDocument: { uri: docUri, version: 3 },
 		contentChanges: [{ text: docText }],
 	});
 	await send("shutdown", null);
@@ -243,10 +275,15 @@ console.log(`\nnotist lsp contract: all checks passed (${notist})`);
 /** Position just inside the first `#<target>` literal (hover resolves
  * references; plain words legitimately return null). */
 function firstTargetPosition(text) {
+	// The wire encoding is utf-8: `character` counts bytes, so convert the
+	// utf-16 column (JS indexOf) through the line prefix's utf-8 length.
 	const lines = text.split("\n");
 	for (let i = 0; i < lines.length; i++) {
 		const col = lines[i].indexOf("#<");
-		if (col >= 0) return { line: i, character: col + 2 };
+		if (col >= 0) {
+			const byteColumn = Buffer.byteLength(lines[i].slice(0, col + 2), "utf8");
+			return { line: i, character: byteColumn };
+		}
 	}
 	return { line: 0, character: 0 };
 }
