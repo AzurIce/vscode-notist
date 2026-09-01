@@ -49,10 +49,12 @@ const checks = [
 	// [description, line (0-based), scope substring]
 	["heading marker", lineOf("= 标题"), "punctuation.definition.heading"],
 	["heading body", lineOf("= 标题"), "entity.name.section"],
-	["module attributes", lineOf('@!['), "meta.annotation.module"],
-	["annotation tag", lineOf('@!['), "entity.name.tag"],
-	["annotation property", lineOf('@!['), "keyword.operator.assignment"],
-	["annotation string value", lineOf('@!['), "string.quoted.double"],
+	["module annotation", lineOf('@!('), "meta.annotation.module"],
+	["annotation shorthand", lineOf("@note"), "entity.other.attribute-name"],
+	["annotation block", lineOf("@(wip"), "meta.annotation.block"],
+	["annotation spread", lineOf("..defaults"), "keyword.operator.spread"],
+	["annotation property", lineOf('@!('), "keyword.operator.assignment"],
+	["annotation string value", lineOf('@!('), "string.quoted.double"],
 	["import keyword", lineOf("#import"), "keyword.control.import"],
 	["import target", lineOf("#import"), "meta.reference"],
 	["import alias", lineOf("#import"), "keyword.control.import.as"],
@@ -71,7 +73,6 @@ const checks = [
 	["enum marker", lineOf("+ 枚举项"), "punctuation.definition.list_item"],
 	["rule", lines.findIndex((l) => l.trim() === "---"), "punctuation.definition.rule"],
 	["table delimiter", lineOf(":-"), "meta.table.delimiter"],
-	["postfix annotation", lineOf("文字内容@note"), "entity.other.attribute-name"],
 	["content block", lineOf("#[一段内容]"), "meta.content-block"],
 	["fence info", lines.findIndex((l) => l.trim() === "```rust"), "constant.other.language"],
 	["escape", lineOf("\\#"), "constant.character.escape"],
@@ -83,7 +84,7 @@ const checks = [
 	["numeric", lineOf("#(1 + 2)"), "constant.numeric"],
 	["if keyword", lineOf("#if total"), "keyword.control"],
 	["else keyword", lineOf("#if total"), "keyword.control"],
-	["none constant", lineOf("#if total"), "constant.language.null"],
+	["unit literal", lineOf("else { () }"), "keyword.operator"],
 	["lambda arrow", lineOf("=> a + b"), "keyword.operator"],
 ];
 

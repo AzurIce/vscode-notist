@@ -1,6 +1,6 @@
 === 一个 notist 语法覆盖样本
 
-@![#design, status = "draft"]
+@!(..defaults, status: "draft")
 
 #import <self::theme>::{warning, accent as highlight}
 
@@ -15,7 +15,8 @@
 - [ ] 任务 _斜线_
 - [x] 已完成任务
 
-@[wip]
+@note
+@(wip: true)
 == 二级标题 #<vault::intro>
 
 --- 
@@ -24,9 +25,7 @@
 | :- | -: |
 | 1 | 2 |
 
-文字内容@note
-
-#[一段内容]@install
+#[一段内容]
 
 ```rust
 fn main() {}
@@ -40,4 +39,4 @@ fn main() {}
 #let greeting = "escaped \" 引号 \n"
 #let double(x: Int) -> Int = x * 2
 #let add = (a: Int, b: Int) => a + b
-#if total > 0 { warning } else { none }
+#if total > 0 { warning } else { () }
