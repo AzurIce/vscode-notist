@@ -4,15 +4,21 @@
  * push diagnostics) is handled by vscode-languageclient off the server's
  * declared capabilities — only the `notist/*` methods need hand-written types.
  *
- * Server contract these rely on (crates/notist-cli/src/lsp.rs, 2026-08-30
- * incremental-sync state):
+ * Server contract these rely on (crates/notist-cli/src/lsp.rs, 2026-09-03
+ * encoding-negotiation state):
  * - INCREMENTAL sync: the server accepts the ranged edits
  *   vscode-languageclient derives from document version changes, as well as
  *   whole-document replacements and mixed batches (applied in order).
  *   Versions are informational only; changes for unopened documents are
  *   dropped server-side.
- * - Position encoding: the server speaks utf-8 only and refuses sessions
- *   that do not offer it (vscode-languageclient converts transparently).
+ * - Position encoding is negotiated: utf-8 is preferred, utf-16 (the spec
+ *   default when undeclared) is accepted — only an explicit offer listing
+ *   neither is refused (vscode-languageclient converts transparently).
+ * - Position requests (hover/completion/definition/references) accept an
+ *   optional `expected_fingerprint` for server-side snapshot identity
+ *   checks; mismatches surface as `snapshot_changed:` errors and are
+ *   retried inside the server, so this client neither sends nor handles
+ *   it.
  * - Diagnostics are pushed: baseline right after initialize, then deltas.
  * - `notist/renderDocument` renders the module OWNING the document (page is
  *   null for non-.not documents or documents outside any vault); `revision`
